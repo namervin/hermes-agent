@@ -223,6 +223,31 @@ export const nousBlueTheme: DashboardTheme = {
 };
 
 /**
+ * Light mode: icy sky-blue canvas with dark slate text. Colours come from the
+ * shared palette table (same values the desktop plugin renders). The dashboard
+ * projection assumes a dark canvas, so the invisible overlay (`foreground`)
+ * is flipped to the palette's dark text colour, as `nous-blue` does.
+ */
+export const oceansTheme: DashboardTheme = {
+  name: "oceans",
+  label: "Oceans",
+  description: "Light mode — icy sky blue with dark slate text",
+  palette: {
+    ...webPresetFromShared(THEME_PRESET_PALETTES.oceans),
+    foreground: { hex: THEME_PRESET_PALETTES.oceans.colors.foreground, alpha: 0 },
+    noiseOpacity: 0,
+  },
+  typography: DEFAULT_TYPOGRAPHY,
+  layout: DEFAULT_LAYOUT,
+  terminalBackground: THEME_PRESET_PALETTES.oceans.colors.card,
+  terminalForeground: THEME_PRESET_PALETTES.oceans.colors.foreground,
+  swatchColors: [
+    THEME_PRESET_PALETTES.oceans.colors.foreground,
+    THEME_PRESET_PALETTES.oceans.colors.primary,
+    THEME_PRESET_PALETTES.oceans.colors.background,
+  ],
+};
+/**
  * Same look as ``defaultTheme`` but with a larger root font size, looser
  * line-height, and ``spacious`` density so every rem-based size in the
  * dashboard scales up. For users who find the default 15px UI too dense.
@@ -252,4 +277,5 @@ export const BUILTIN_THEMES: Record<string, DashboardTheme> = {
   mono: monoTheme,
   cyberpunk: cyberpunkTheme,
   rose: roseTheme,
+  oceans: oceansTheme,
 };

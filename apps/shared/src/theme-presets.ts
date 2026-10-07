@@ -438,6 +438,41 @@ export const THEME_PRESET_PALETTES = {
       userBubbleBorder: '#242466'
     }
   },
+  /**
+   * Light, icy-blue minimalist theme. Palette taken from the MIT-licensed
+   * `minimalist-themes-for-hermes` desktop plugin (c) 2026 Miguel Euraque, so the
+   * web dashboard and the desktop render the same colours.
+   */
+  oceans: {
+    colors: {
+      background: '#B9E2FB',
+      foreground: '#3A3E41',
+      card: '#DFF2FD',
+      cardForeground: '#3A3E41',
+      muted: '#F3FAFE',
+      mutedForeground: '#666A6D',
+      popover: '#CFEBFC',
+      popoverForeground: '#3A3E41',
+      primary: '#446072',
+      primaryForeground: '#ffffff',
+      secondary: '#C6E8FC',
+      secondaryForeground: '#3A3E41',
+      accent: '#C7E8FC',
+      accentForeground: '#3A3E41',
+      border: '#CED4D8',
+      input: '#E8F6FE',
+      ring: '#446072',
+      midground: '#446072',
+      midgroundForeground: '#ffffff',
+      composerRing: '#446072',
+      destructive: '#B42318',
+      destructiveForeground: '#ffffff',
+      sidebarBackground: '#ACDDFA',
+      sidebarBorder: '#CED4D8',
+      userBubble: '#96D4F9',
+      userBubbleBorder: '#5397C0'
+    }
+  },
   ember: {
     colors: {
       background: '#160800',
