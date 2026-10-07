@@ -998,7 +998,7 @@ DEFAULT_CONFIG = {
     },
 
     "dashboard": {
-        # Visual theme: "default" | "midnight" | "ember" | "mono" | "cyberpunk" | "rose"
+        # Visual theme: "default" | "midnight" | "ember" | "mono" | "cyberpunk" | "rose" | "oceans"
         "theme": "default",
         # Process-isolation rollout controls. Read via the raw config loader, so tui_gateway.server
         # also owns explicit defaults.
