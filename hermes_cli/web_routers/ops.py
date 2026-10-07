@@ -568,9 +568,31 @@ async def run_security_audit(profile: Optional[str] = None):
 
 
 def _dashboard_backup_dir(profile: Optional[str] = None) -> Path:
-    """``<profile home>/backups`` — the archive belongs to the profile it backs up."""
+    """Backup destination root.
+
+    Honors ``HERMES_BACKUP_DIR`` (env or profile env override) so the dashboard
+    default can be retargeted (e.g. to a separate drive) without forking.
+    Falls back to ``<profile home>/backups`` — the archive lives next to the
+    profile it backs up when no override is set.
+    """
+    override = os.environ.get("HERMES_BACKUP_DIR", "").strip()
+    if override:
+        return Path(override).expanduser()
     with _config_profile_scope(profile):
         return get_hermes_home() / "backups"
+
+
+def _dashboard_import_staging_dir(profile: Optional[str] = None) -> Path:
+    """Local staging for dashboard import uploads — kept under the profile home
+    so a remote backup dir (e.g. a separate drive) is not littered with upload
+    scratch files. Falls back to ``<profile home>/backups`` when no remote
+    backup dir is configured.
+    """
+    with _config_profile_scope(profile):
+        home_backups = get_hermes_home() / "backups"
+    if os.environ.get("HERMES_BACKUP_DIR", "").strip():
+        return home_backups / "import-staging"
+    return home_backups
 
 
 @router.post("/api/ops/backup")
@@ -596,13 +618,14 @@ async def run_backup(body: BackupRequest, profile: Optional[str] = None):
 async def download_dashboard_backup(archive: str, profile: Optional[str] = None):
     try:
         backup_dir = _dashboard_backup_dir(profile).expanduser().resolve(strict=False)
+        staging_dir = _dashboard_import_staging_dir(profile).expanduser().resolve(strict=False)
         target = Path(archive).expanduser().resolve(strict=True)
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="Backup not found")
     except (OSError, RuntimeError):
         raise HTTPException(status_code=400, detail="Invalid backup path")
 
-    if not _path_is_under(backup_dir, target):
+    if not (_path_is_under(backup_dir, target) or _path_is_under(staging_dir, target)):
         raise HTTPException(status_code=403, detail="Backup is outside the dashboard backup directory")
     if not target.is_file():
         raise HTTPException(status_code=404, detail="Backup not found")
@@ -645,7 +668,7 @@ async def run_import_upload(
     profile: Optional[str] = None,
 ):
     profile = destructive_profile(profile, "POST /api/ops/import-upload")
-    staging_dir = _dashboard_backup_dir(profile)
+    staging_dir = _dashboard_import_staging_dir(profile)
     try:
         staging_dir.mkdir(parents=True, exist_ok=True)
     except OSError as exc:
