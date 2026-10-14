@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from hermes_cli import backup
+from hermes_constants import mark_named_profile_deleted
 
 
 def _mk_profile(home: Path, jobs: int = 0) -> Path:
@@ -55,6 +56,33 @@ class TestSiblingEnumeration:
 
         monkeypatch.setattr("hermes_cli.profiles._get_default_hermes_home", _boom)
         assert backup._sibling_profile_homes(tmp_path) == []
+
+    def test_excludes_tombstoned_profile_left_by_failed_rmtree(self, profiles):
+        """A delete that wrote its tombstone but failed to rmtree must not be snapshotted.
+
+        ``hermes profile delete`` marks the name deleted BEFORE ``rmtree`` and raises if the
+        rmtree fails (locked handle, ACL the owner token cannot clear). The directory survives
+        with full identity markers, so a name+id filter alone re-enrolled the corpse and every
+        ``hermes update`` wrote a fresh pre-update snapshot into it (#live-regression).
+        """
+        dead = _mk_profile(profiles["sparks"].parent / "zombie", jobs=2)
+        mark_named_profile_deleted(dead)
+
+        names = [n for n, _ in backup._sibling_profile_homes(profiles["default"])]
+        assert "zombie" not in names
+        assert names == ["sparks", "work"]
+
+    def test_tombstoned_profile_gets_no_snapshot(self, profiles):
+        """The failure that motivated the filter: no pre-update snapshot for a deleted profile."""
+        dead = _mk_profile(profiles["sparks"].parent / "zombie", jobs=2)
+        mark_named_profile_deleted(dead)
+
+        result = backup.create_pre_update_snapshots_all_profiles(
+            invoking_home=profiles["default"], keep=1
+        )
+        assert "zombie" not in result
+        assert not (dead / "state-snapshots").exists()
+        assert set(result) == {"work", "sparks"}
 
 
 class TestAllProfileSnapshots:
