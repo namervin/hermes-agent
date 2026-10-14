@@ -1895,6 +1895,12 @@ def _sibling_profile_homes(invoking_home: Path) -> list[tuple[str, Path]]:
     The update's code swap and gateway fleet restart touch every profile,
     so the pre-update snapshot must too (#66140). The invoking profile is
     excluded — its snapshot is taken by the existing call.
+
+    Tombstoned names are excluded too. ``profile delete`` writes the tombstone BEFORE
+    ``rmtree`` and raises when the rmtree fails (locked handle, or an ACL the owner token
+    cannot clear), leaving a directory that still carries every identity marker. A name+id
+    filter alone re-enrolled that corpse, so each ``hermes update`` took a fresh pre-update
+    snapshot inside a profile the user had already deleted.
     """
     homes: list[tuple[str, Path]] = []
     try:
@@ -1903,10 +1909,15 @@ def _sibling_profile_homes(invoking_home: Path) -> list[tuple[str, Path]]:
             _get_profiles_root,
             _PROFILE_ID_RE,
         )
+        from hermes_constants import named_profile_is_deleted
 
         invoking = invoking_home.resolve()
         default_home = _get_default_hermes_home()
-        if default_home.is_dir() and default_home.resolve() != invoking:
+        if (
+            default_home.is_dir()
+            and default_home.resolve() != invoking
+            and not named_profile_is_deleted(default_home)
+        ):
             homes.append(("default", default_home))
         root = _get_profiles_root()
         if root.is_dir():
@@ -1915,6 +1926,7 @@ def _sibling_profile_homes(invoking_home: Path) -> list[tuple[str, Path]]:
                     entry.is_dir()
                     and entry.name != "default"
                     and _PROFILE_ID_RE.match(entry.name)
+                    and not named_profile_is_deleted(entry)
                     and entry.resolve() != invoking
                 ):
                     homes.append((entry.name, entry))
