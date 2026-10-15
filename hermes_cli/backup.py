@@ -1425,9 +1425,16 @@ def _create_quick_snapshot_locked(
     # #68805 review: skip pruning when a present DB failed to capture OR was
     # skipped for size — either way the snapshot is incomplete and the older
     # snapshot may contain the only recoverable database.
-    incomplete = failed_dbs or oversized_skipped
-    if not incomplete:
-        _prune_quick_snapshots(root, keep=_QUICK_DEFAULT_KEEP if keep is None else keep)
+    # Exception: when the ONLY incompleteness is oversized_skipped and no
+    # snapshot that would be deleted holds any of the skipped files, pruning
+    # cannot lose the only copy, so it still runs (otherwise a DB permanently
+    # above the size cap makes keep= a no-op and snapshots accumulate forever).
+    effective_keep = _QUICK_DEFAULT_KEEP if keep is None else keep
+    if not failed_dbs and (
+        not oversized_skipped
+        or _prune_safe_for_skipped(root, effective_keep, oversized_skipped)
+    ):
+        _prune_quick_snapshots(root, keep=effective_keep)
     else:
         if oversized_skipped:
             print(
@@ -2163,6 +2170,34 @@ def restore_cron_jobs_all_profiles(
             result["profile"] = name
             restored.append(result)
     return restored
+
+
+def _prune_safe_for_skipped(root: Path, keep: int, skipped: list[str]) -> bool:
+    """True if no snapshot beyond ``keep`` holds any of the ``skipped`` files.
+
+    Unreadable manifests are treated conservatively (assume they hold them).
+    """
+    if not root.exists():
+        return True
+    dirs = sorted(
+        (
+            d
+            for d in root.iterdir()
+            if d.is_dir() and not d.name.startswith(".") and not d.name.endswith(".partial")
+        ),
+        key=lambda d: d.name,
+        reverse=True,
+    )
+    for d in dirs[keep:]:
+        try:
+            with open(d / "manifest.json", encoding="utf-8") as f:
+                files = json.load(f).get("files", {})
+        except (OSError, ValueError, AttributeError):
+            return False
+        for rel in skipped:
+            if rel in files or (d / rel).exists():
+                return False
+    return True
 
 
 def _prune_quick_snapshots(root: Path, keep: int = _QUICK_DEFAULT_KEEP) -> int:
