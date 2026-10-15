@@ -152,8 +152,9 @@ class TestCreateProfile:
             line.startswith("#") or not line.strip()
             for line in content.splitlines()
         )
-        mode = stat.S_IMODE(env_path.stat().st_mode)
-        assert mode == 0o600
+        if os.name != "nt":  # Windows reports 0o666 for every writable file; no POSIX owner-only bits
+            mode = stat.S_IMODE(env_path.stat().st_mode)
+            assert mode == 0o600
 
 
     def test_fresh_profile_inherits_a_usable_model(self, profile_env):
@@ -517,7 +518,8 @@ class TestBackfillProfileEnvs:
         assert sorted(backfilled) == ["old1", "old2"]
         for p in (p1, p2):
             assert (p / ".env").read_text(encoding="utf-8-sig") == "OPENROUTER_API_KEY=root-key\n"
-            assert stat.S_IMODE((p / ".env").stat().st_mode) == 0o600
+            if os.name != "nt":  # POSIX permission bits only
+                assert stat.S_IMODE((p / ".env").stat().st_mode) == 0o600
 
 
     def test_placeholder_when_default_has_no_env(self, profile_env):
@@ -1054,10 +1056,16 @@ class TestWrapperScript:
         from hermes_cli.profiles import create_wrapper_script
         wrapper = create_wrapper_script("mybot")
         assert wrapper is not None
-        assert wrapper.name == "mybot"
         content = wrapper.read_text(encoding="utf-8-sig")
-        assert content.startswith("#!/bin/sh")
-        assert "exec /opt/hermes/bin/hermes -p mybot" in content
+        if os.name == "nt":
+            # Windows creates a .bat wrapper instead of a POSIX sh script.
+            assert wrapper.name == "mybot.bat"
+            assert content.startswith("@echo off")
+            assert "hermes -p mybot" in content
+        else:
+            assert wrapper.name == "mybot"
+            assert content.startswith("#!/bin/sh")
+            assert "exec /opt/hermes/bin/hermes -p mybot" in content
 
 
     @pytest.mark.platforms("windows")
@@ -1134,7 +1142,7 @@ class TestFindAliasForProfile:
         info = next(p for p in list_profiles() if p.name == "steve")
         assert info.alias_name == "qiaobusi"
         assert info.alias_path is not None
-        assert info.alias_path.name == "qiaobusi"
+        assert info.alias_path.name == ("qiaobusi.bat" if os.name == "nt" else "qiaobusi")
 
 
 # ===================================================================
