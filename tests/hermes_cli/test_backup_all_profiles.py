@@ -155,3 +155,68 @@ class TestPerProfileCronRestore:
 
     def test_empty_map_is_noop(self, profiles):
         assert backup.restore_cron_jobs_all_profiles({}) == []
+
+
+class TestPruneWithOversizedSkipped:
+    """Prune must honor keep when skipped-oversized files exist in no old snapshot."""
+
+    @staticmethod
+    def _home(tmp_path):
+        h = tmp_path / "home"
+        h.mkdir()
+        (h / "config.yaml").write_text("a: 1\n")
+        return h
+
+    @staticmethod
+    def _mkdb(h):
+        import sqlite3
+        c = sqlite3.connect(h / "state.db")
+        c.execute("create table t(x)")
+        c.executemany("insert into t values (?)", [("x" * 200,)] * 20)
+        c.commit()
+        c.close()
+
+    def test_prune_runs_when_old_snapshots_lack_skipped_file(self, tmp_path, monkeypatch):
+        from hermes_cli import backup
+        h = self._home(tmp_path)
+        self._mkdb(h)
+        root = h / "state-snapshots"
+        for i in range(4):  # old snapshots without state.db
+            d = root / f"2026010{i}-000000-old"
+            d.mkdir(parents=True)
+            (d / "manifest.json").write_text('{"files": {"config.yaml": 5}}')
+        sid = backup.create_quick_snapshot(
+            label="new", hermes_home=h, max_file_size=1024, keep=1
+        )
+        assert sid is not None
+        remaining = [d.name for d in root.iterdir() if d.is_dir()]
+        assert remaining == [sid]
+
+    def test_prune_skipped_when_old_snapshot_has_skipped_file(self, tmp_path):
+        from hermes_cli import backup
+        h = self._home(tmp_path)
+        self._mkdb(h)
+        root = h / "state-snapshots"
+        d = root / "20260101-000000-old"
+        d.mkdir(parents=True)
+        (d / "manifest.json").write_text('{"files": {"state.db": 99}}')
+        (d / "state.db").write_bytes(b"x")
+        sid = backup.create_quick_snapshot(
+            label="new", hermes_home=h, max_file_size=1024, keep=1
+        )
+        assert {x.name for x in root.iterdir() if x.is_dir()} == {d.name, sid}
+
+    def test_prune_skipped_when_failed_dbs(self, tmp_path, monkeypatch):
+        from hermes_cli import backup
+        h = self._home(tmp_path)
+        self._mkdb(h)
+        root = h / "state-snapshots"
+        d = root / "20260101-000000-old"
+        d.mkdir(parents=True)
+        (d / "manifest.json").write_text('{"files": {"config.yaml": 5}}')
+        monkeypatch.setattr(backup, "_safe_copy_db", lambda s, t: False)
+        sid = backup.create_quick_snapshot(
+            label="new", hermes_home=h, keep=1
+        )
+        assert sid is not None
+        assert d.exists()
