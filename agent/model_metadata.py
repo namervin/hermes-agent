@@ -321,8 +321,9 @@ DEFAULT_CONTEXT_LENGTHS = {
     # 1M verified on OpenRouter & Nous portal 2026-08; qwen3-max = 256K Coding Plan snapshot)
     "qwen3.8-max": 1_000_000, "qwen3.8-flash": 1_000_000, "qwen3.6-plus": 1048576, "qwen3.7-plus": 1048576,
     "qwen3-coder-plus": 1000000, "qwen3-coder": 262144, "qwen3-max": 262144, "qwen": 131072,
-    # MiniMax — M3 is 1M; M2.x is 204,800. https://platform.minimax.io/docs/api-reference/text-chat-openai
-    "minimax-m3": 1000000, "minimax": 204800,
+    # MiniMax — M3 / M3.1 are 1M; M2.x is 204,800. https://platform.minimax.io/docs/api-reference/text-chat-openai
+    # M3.1-Flash-Preview verified live 2026-10-07 via /anthropic/v1/messages: 1M context, always-on thinking.
+    "minimax-m3": 1000000, "minimax-m3.1": 1000000, "minimax-m3.1-flash-preview": 1000000, "minimax": 204800,
     # GLM — Nous + OpenRouter /v1/models (2026-09-09): 5.3 / 5.3-flash 1,310,720 (:batch/:US 1,048,576);
     # 5.3-flashx 1,048,576 (2026-09-20; its own key, else the shorter 5.3-flash entry wins by substring);
     # 5.2 1,048,576; 5 / 5.1 / 4.7 / 4.6 204,800; *-turbo / 4.7-flash 202,752 (the catch-all).
@@ -1518,8 +1519,11 @@ def _model_name_suggests_kimi(model: str) -> bool:
 
 
 def _model_name_suggests_minimax_m3(model: str) -> bool:
-    """MiniMax M3 on any surface — models.dev underreport guard and agent_runtime_helpers cache-control gating."""
-    return "minimax-m3" in model.lower()
+    """MiniMax M3 / M3.1 on any surface — models.dev underreport guard and agent_runtime_helpers cache-control gating.
+    M3.1-Flash-Preview verified 2026-10-07: server-side prefix caching, same pattern as M3 (cache_control markers are dead weight).
+    """
+    lower = model.lower()
+    return "minimax-m3" in lower or "minimax-m3.1" in lower
 
 
 # Catalog keys added AFTER the model was reachable via a shorter catch-all (or the
@@ -1528,6 +1532,7 @@ def _model_name_suggests_minimax_m3(model: str) -> bool:
 # shorter matching key and the 256K fallback — the threshold is inferred from them.
 _PRE_CATALOG_STALE_KEYS = frozenset({
     "minimax-m3",  # 1M; "minimax" catch-all persisted 204,800
+    "minimax-m3.1", "minimax-m3.1-flash-preview",  # 1M; "minimax" catch-all persisted 204,800
     "muse-spark-1.3", "muse-spark",  # 1M; pre-entry builds fell through to the 256K fallback
     "grok-4.3", "grok-4.6",  # 1M / 500K; "grok-4" catch-all persisted 256,000
     "grok-4-fast", "grok-4.20",  # 2M; fell through to the 256K fallback
